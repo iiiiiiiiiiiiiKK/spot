@@ -1,8 +1,4 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { binanceService, getQuoteAsset } from './services/binanceService';
-import { TickerData } from './types';
-import { VirtualTable } from './components/VirtualTable';
-
 // --- STYLES & FONTS INJECTION ---
 const GlobalStyles = () => (
   <style>{`
