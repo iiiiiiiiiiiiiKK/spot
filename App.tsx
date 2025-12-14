@@ -402,7 +402,7 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
 
   useEffect(() => { onSortedIdsChange?.(sortedData.map((d: any) => d.symbol)); }, [sortedData, onSortedIdsChange]);
 
-  const ROW_HEIGHT = isPixel ? 56 : 50; 
+  const ROW_HEIGHT = isPixel ? 50 : 40; 
   const HEADER_HEIGHT = 40;
   const totalHeight = sortedData.length * ROW_HEIGHT;
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 10);
