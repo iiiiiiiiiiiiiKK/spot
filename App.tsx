@@ -651,7 +651,7 @@ const App = () => {
         <div className="max-w-7xl mx-auto px-2 sm:px-4 h-12 sm:h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2">
              <h1 className={`text-sm sm:text-xl font-bold tracking-tight ${t.textMain} truncate`}>
-               {theme === 'pixel' || theme === 'lightPixel' ? 'MKT_V1' : 'Binance Spot'}
+               {theme === 'pixel' || theme === 'lightPixel' ? '币安现货数据库' : 'Binance Spot'}
              </h1>
           </div>
           
