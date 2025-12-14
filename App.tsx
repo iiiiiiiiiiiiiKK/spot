@@ -192,7 +192,6 @@ class BinanceService {
          fetch(`${baseUrl}/ticker?symbol=${symbol}&windowSize=4h`).then(r => r.ok ? r.json() : null)
       ]);
 
-      // Fetch Klines for 7d/30d calculation
       const klinePromise = fetch(`${baseUrl}/klines?symbol=${symbol}&interval=1d&limit=32`).then(r => r.ok ? r.json() : null);
 
       const [tickerResults, klines] = await Promise.all([tickerStatsPromise, klinePromise]);
@@ -206,14 +205,12 @@ class BinanceService {
         if (klines && Array.isArray(klines) && klines.length >= 8) {
              const currentPrice = item.price;
              
-             // 7 Days ago
              const index7d = klines.length - 1 - 7; 
              if (index7d >= 0) {
                  const close7d = parseFloat(klines[index7d][4]);
                  if (close7d > 0) item.changePercent7d = ((currentPrice - close7d) / close7d) * 100;
              }
 
-             // 30 Days ago
              const index30d = klines.length - 1 - 30;
              if (index30d >= 0) {
                  const close30d = parseFloat(klines[index30d][4]);
@@ -225,7 +222,6 @@ class BinanceService {
         this.notify();
       }
     } catch(e) {
-        // ignore
     } finally {
       this.pendingFetches.delete(symbol);
     }
@@ -377,10 +373,12 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
         
         {/* 24h Fixed Width Column */}
-        <button className="w-14 sm:w-24 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change24h')}>24h<SortIcon field="change24h" /></button>
+        <button className="w-[55px] sm:w-24 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change24h')}>24h<SortIcon field="change24h" /></button>
         
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change7d')}>7d<SortIcon field="change7d" /></button>
-        <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change30d')}>30d<SortIcon field="change30d" /></button>
+        
+        {/* 30d with right padding */}
+        <button className="flex-1 px-0.5 pr-[3px] text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change30d')}>30d<SortIcon field="change30d" /></button>
       </div>
 
       {/* Table Body */}
@@ -393,7 +391,7 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
             const isFav = favorites.has(item.symbol);
 
             // Cell Renderer
-            const renderPctCell = (val: number | undefined, isBoxed = false, isFlex = true) => {
+            const renderPctCell = (val: number | undefined, isBoxed = false, isFlex = true, isLast = false) => {
                 const color = theme === 'pixel' 
                    ? (val !== undefined && val > 0 ? '#00aa00' : '#aa0000') 
                    : (val !== undefined && val > 0 ? '#10b981' : '#ef4444');
@@ -403,13 +401,28 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                    ? { backgroundColor: getHeatmapColor(val, theme as ThemeMode), color: theme === 'pixel' ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937') }
                    : { color };
                 
-                const wrapperClass = isBoxed ? 'w-14 sm:w-24' : (isFlex ? 'flex-1' : 'w-auto');
-                const innerClass = isBoxed ? 'rounded py-1 font-bold text-[9px] sm:text-xs' : 'text-[9px] sm:text-xs font-mono';
-                const containerClass = `px-0.5 sm:px-1 h-full flex items-center justify-end ${wrapperClass}`;
+                // Width & Wrapper
+                const wrapperClass = isBoxed ? 'w-[55px] sm:w-24' : (isFlex ? 'flex-1' : 'w-auto');
+                // Right padding for last column (30d)
+                const paddingClass = isLast ? 'pr-[3px]' : 'px-0.5'; 
+                
+                // Inner Text Styling
+                let innerClass = 'w-full ';
+                if (isBoxed) {
+                  // Pixel Theme: Smaller, Compact
+                  if (theme === 'pixel') {
+                    innerClass += 'rounded py-0.5 font-bold text-[8px] sm:text-xs text-right';
+                  } else {
+                    // Light/Dark Theme: Centered text for 24h
+                    innerClass += `rounded py-1 font-bold text-[9px] sm:text-xs ${theme === 'light' ? 'text-center' : 'text-right'}`;
+                  }
+                } else {
+                  innerClass += 'text-[9px] sm:text-xs font-mono text-right';
+                }
 
                 return (
-                    <div className={containerClass}>
-                        <div className={`w-full text-right ${innerClass}`} style={style}>
+                    <div className={`${wrapperClass} ${paddingClass} sm:px-1 h-full flex items-center justify-end`}>
+                        <div className={innerClass} style={style}>
                            {val !== undefined ? `${val > 0 ? '+' : ''}${val.toFixed(isBoxed ? 2 : 1)}%` : '-'}
                         </div>
                     </div>
@@ -433,7 +446,7 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                      <span className={`text-[8px] sm:text-[10px] ${t.textSub} opacity-70 truncate hidden sm:inline`}>{displayQuote}</span>
                 </div>
                 
-                {/* Price (Compact) */}
+                {/* Price */}
                 <div className={`w-14 sm:w-28 px-0.5 text-right font-mono text-[10px] sm:text-sm font-medium h-full flex items-center justify-end ${t.textMain}`}>
                   {item.price < 1 ? item.price.toFixed(5) : item.price.toFixed(2)}
                 </div>
@@ -443,16 +456,16 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                   {Number(item.volume).toLocaleString(undefined, { maximumFractionDigits: 0, notation: 'compact' })}
                 </div>
                 
-                {/* 1h, 4h (Flex-1) */}
+                {/* 1h, 4h */}
                 {renderPctCell(item.changePercent1h, false, true)}
                 {renderPctCell(item.changePercent4h, false, true)}
 
-                {/* 24h (Boxed, Fixed Width) */}
+                {/* 24h (Boxed) */}
                 {renderPctCell(item.changePercent24h, true, false)}
 
-                {/* 7d, 30d (Flex-1) */}
+                {/* 7d, 30d */}
                 {renderPctCell(item.changePercent7d, false, true)}
-                {renderPctCell(item.changePercent30d, false, true)}
+                {renderPctCell(item.changePercent30d, false, true, true)}
 
               </div>
             );
@@ -589,7 +602,8 @@ const App = () => {
                 <span className="ml-1">▼</span>
               </button>
               {isFilterOpen && (
-                <div className={`absolute top-full right-0 mt-2 w-max max-w-[90vw] md:w-[400px] ${t.dropdownBg} backdrop-blur-xl border ${t.border} ${t.radius} shadow-2xl z-50 overflow-hidden flex flex-col max-h-[50vh]`}>
+                // Changed from right-0 to left-0 to expand to the right
+                <div className={`absolute top-full left-0 mt-2 w-max max-w-[90vw] md:w-[400px] ${t.dropdownBg} backdrop-blur-xl border ${t.border} ${t.radius} shadow-2xl z-50 overflow-hidden flex flex-col max-h-[50vh]`}>
                   <div className={`p-3 overflow-y-auto custom-scrollbar grid grid-cols-4 gap-2`}>
                     {availableQuoteAssets.map((asset) => (
                        <button key={asset} onClick={() => setSelectedAssets(prev => asset === 'ALL' ? ['ALL'] : prev.includes('ALL') ? [asset] : prev.includes(asset) ? (prev.length === 1 ? ['ALL'] : prev.filter(a => a !== asset)) : [...prev, asset])} 
