@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 
 // --- ICONS ---
+// 使用 currentColor 以便图标颜色随文本颜色自动变化
 const IconBinance = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 32 32" className={className} fill="currentColor">
     <path d="M16 0l-6 6 6 6 6-6-6-6zM6 6l-6 6 6 6 6-6-6-6zM26 6l-6 6 6 6 6-6-6-6zM16 12l-6 6 6 6 6-6-6-6zM6 18l-6 6 6 6 6-6-6-6zM26 18l-6 6 6 6 6-6-6-6zM16 24l-6 6 6 6 6-6-6-6z" />
@@ -34,9 +35,14 @@ const GlobalStyles = () => (
     .dark ::-webkit-scrollbar-thumb { background: #4b5563; }
     .dark ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
     
-    .pixel ::-webkit-scrollbar { width: 8px; height: 8px; }
+    /* Pixel Scrollbar (shared by both pixel themes) */
+    .pixel ::-webkit-scrollbar, .lightPixel ::-webkit-scrollbar { width: 8px; height: 8px; }
+    
     .pixel ::-webkit-scrollbar-thumb { background: #4ade80; border-radius: 0; border: 2px solid #0f172a; }
     .pixel ::-webkit-scrollbar-track { background: #0f172a; border-left: 2px solid #4ade80; }
+
+    .lightPixel ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 0; border: 2px solid #f3f4f6; }
+    .lightPixel ::-webkit-scrollbar-track { background: #f3f4f6; border-left: 2px solid #1f2937; }
 
     /* Mobile Scroll Fixes */
     .scroll-container {
@@ -70,7 +76,8 @@ export interface TickerData {
 
 export type SortField = 'symbol' | 'price' | 'volume' | 'change1h' | 'change4h' | 'change24h' | 'change7d' | 'change30d';
 export type SortDirection = 'asc' | 'desc';
-export type ThemeMode = 'light' | 'dark' | 'pixel';
+// Added 'lightPixel' to ThemeMode types
+export type ThemeMode = 'light' | 'dark' | 'pixel' | 'lightPixel';
 
 // --- THEME CONFIGURATION ---
 const THEMES = {
@@ -95,6 +102,7 @@ const THEMES = {
     loading: 'text-gray-500',
     dropdownBg: 'bg-white/95',
     shadow: 'shadow-md',
+    containerClass: '',
   },
   dark: {
     id: 'dark',
@@ -117,10 +125,12 @@ const THEMES = {
     loading: 'text-gray-400',
     dropdownBg: 'bg-gray-800/95',
     shadow: 'shadow-xl shadow-black/50',
+    containerClass: 'dark',
   },
+  // Existing Dark Pixel Theme
   pixel: {
     id: 'pixel',
-    name: 'Pixel',
+    name: 'Pixel (Dark)',
     bg: 'bg-slate-900',
     card: 'bg-slate-900',
     textMain: 'text-green-400',
@@ -128,7 +138,7 @@ const THEMES = {
     border: 'border-green-500 border-b-4 border-r-4 border-t-2 border-l-2',
     headerBg: 'bg-slate-900 border-b-4 border-green-500',
     radius: 'rounded-none',
-    font: "font-['Press_Start_2P'] tracking-tight text-xs",
+    font: "font-['Press_Start_2P'] tracking-tight text-xs", // Pixel font
     iconMain: 'text-green-600',
     iconHover: 'hover:text-green-300',
     button: 'bg-slate-900 hover:bg-green-900 border-green-600 text-green-400 border-2',
@@ -139,6 +149,32 @@ const THEMES = {
     loading: 'text-green-500 animate-pulse',
     dropdownBg: 'bg-slate-900 border-4 border-green-500',
     shadow: 'shadow-none',
+    containerClass: 'pixel',
+  },
+  // New Light Pixel Theme
+  lightPixel: {
+    id: 'lightPixel',
+    name: 'Pixel (Light)',
+    bg: 'bg-gray-100',
+    card: 'bg-white',
+    textMain: 'text-gray-900',
+    textSub: 'text-gray-500',
+    // Black/Dark gray borders for light pixel look
+    border: 'border-gray-900 border-b-4 border-r-4 border-t-2 border-l-2',
+    headerBg: 'bg-white border-b-4 border-gray-900',
+    radius: 'rounded-none',
+    font: "font-['Press_Start_2P'] tracking-tight text-xs", // Pixel font
+    iconMain: 'text-gray-900',
+    iconHover: 'hover:text-gray-600',
+    button: 'bg-white hover:bg-gray-200 border-gray-900 text-gray-900 border-2',
+    buttonActive: 'bg-gray-900 text-white border-gray-900 border-2',
+    accent: 'text-black',
+    rowBorder: 'border-gray-300 border-dashed',
+    rowHover: 'hover:bg-gray-100',
+    loading: 'text-gray-900 animate-pulse',
+    dropdownBg: 'bg-white border-4 border-gray-900',
+    shadow: 'shadow-none',
+    containerClass: 'lightPixel',
   }
 };
 
@@ -296,12 +332,13 @@ const binanceService = new BinanceService();
 // --- COMPONENTS ---
 
 const getHeatmapColor = (pct: number | undefined, theme: ThemeMode) => {
-  if (pct === undefined) return theme === 'dark' ? '#374151' : theme === 'pixel' ? 'transparent' : '#f3f4f6';
+  if (pct === undefined) return theme === 'dark' ? '#374151' : (theme === 'pixel' || theme === 'lightPixel' ? 'transparent' : '#f3f4f6');
   
-  if (theme === 'pixel') {
-    if (pct > 0) return '#00aa00';
-    if (pct < 0) return '#aa0000';
-    return '#555555';
+  // Pixel themes use high contrast, no pastels
+  if (theme === 'pixel' || theme === 'lightPixel') {
+    if (pct > 0) return '#00aa00'; // Green
+    if (pct < 0) return '#aa0000'; // Red
+    return '#555555'; // Neutral
   }
 
   if (theme === 'dark') {
@@ -332,6 +369,7 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
   const [sortField, setSortField] = useState<SortField>('volume');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const t = THEMES[theme as ThemeMode];
+  const isPixel = theme === 'pixel' || theme === 'lightPixel';
 
   useEffect(() => {
     const container = containerRef.current;
@@ -364,7 +402,7 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
 
   useEffect(() => { onSortedIdsChange?.(sortedData.map((d: any) => d.symbol)); }, [sortedData, onSortedIdsChange]);
 
-  const ROW_HEIGHT = theme === 'pixel' ? 56 : 50; 
+  const ROW_HEIGHT = isPixel ? 56 : 50; 
   const HEADER_HEIGHT = 40;
   const totalHeight = sortedData.length * ROW_HEIGHT;
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 10);
@@ -404,13 +442,11 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
         <button className="w-16 px-0.5 text-left h-full flex items-center hover:opacity-80 truncate" onClick={() => handleSort('symbol')}>Tkn<SortIcon field="symbol" /></button>
         <button className="w-20 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80 truncate" onClick={() => handleSort('price')}>Price<SortIcon field="price" /></button>
         
-        {/* Hidden on Mobile */}
         <button className="hidden md:flex w-24 px-2 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('volume')}>Vol<SortIcon field="volume" /></button>
         
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change1h')}>1h<SortIcon field="change1h" /></button>
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
         
-        {/* 24h Centered */}
         <button className="w-14 px-0.5 text-center h-full flex items-center justify-center hover:opacity-80" onClick={() => handleSort('change24h')}>24h<SortIcon field="change24h" /></button>
         
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change7d')}>7d<SortIcon field="change7d" /></button>
@@ -418,7 +454,7 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
       </div>
 
       {/* Table Body */}
-      <div ref={containerRef} className={`flex-1 overflow-y-auto relative scroll-container ${theme === 'pixel' ? 'pixel' : theme === 'dark' ? 'dark' : ''}`}>
+      <div ref={containerRef} className={`flex-1 overflow-y-auto relative scroll-container ${t.containerClass}`}>
         <div style={{ height: totalHeight, position: 'relative' }}>
           {visibleData.map((item: any, index: number) => {
             const quoteAsset = getQuoteAsset(item.symbol);
@@ -427,21 +463,28 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
 
             // Cell Renderer
             const renderPctCell = (val: number | undefined, isBoxed = false, isFlex = true, isLast = false) => {
-                const color = theme === 'pixel' 
+                // Determine text color for pixel themes vs standard themes
+                const color = isPixel 
                    ? (val !== undefined && val > 0 ? '#00aa00' : '#aa0000') 
                    : (val !== undefined && val > 0 ? '#10b981' : '#ef4444');
                 
-                const style = isBoxed 
-                   ? { backgroundColor: getHeatmapColor(val, theme as ThemeMode), color: theme === 'pixel' ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937') }
-                   : { color };
+                // Determine background and text color for boxed cells
+                let boxStyle = {};
+                if (isBoxed) {
+                    const bgColor = getHeatmapColor(val, theme as ThemeMode);
+                    // For pixel themes, text inside box is black for high contrast
+                    const textColor = isPixel ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937');
+                    boxStyle = { backgroundColor: bgColor, color: textColor };
+                }
+
+                const style = isBoxed ? boxStyle : { color };
                 
                 const wrapperClass = isBoxed ? 'w-14' : (isFlex ? 'flex-1' : 'w-auto');
                 const paddingClass = isLast ? 'pr-1.5' : 'px-0.5'; 
                 
                 let innerClass = 'w-full ';
                 if (isBoxed) {
-                  // Consistent Box Logic for all themes
-                  if (theme === 'pixel') {
+                  if (isPixel) {
                     innerClass += 'rounded py-0.5 font-bold text-[8px] sm:text-xs text-center';
                   } else {
                     innerClass += 'rounded py-1 font-bold text-[9px] sm:text-xs text-center';
@@ -595,7 +638,7 @@ const App = () => {
   }, [tickerDataMap, selectedAssets, searchQuery, viewMode, favorites]);
 
   const toggleTheme = () => {
-    const cycle: ThemeMode[] = ['light', 'dark', 'pixel'];
+    const cycle: ThemeMode[] = ['light', 'dark', 'pixel', 'lightPixel'];
     setTheme(cycle[(cycle.indexOf(theme) + 1) % cycle.length]);
   };
 
@@ -608,13 +651,13 @@ const App = () => {
         <div className="max-w-7xl mx-auto px-2 sm:px-4 h-12 sm:h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2">
              <h1 className={`text-sm sm:text-xl font-bold tracking-tight ${t.textMain} truncate`}>
-               {theme === 'pixel' ? 'MKT_V1' : 'Binance Spot'}
+               {theme === 'pixel' || theme === 'lightPixel' ? 'MKT_V1' : 'Binance Spot'}
              </h1>
           </div>
           
           <div className="flex items-center space-x-2">
              <button onClick={toggleTheme} className={`px-2 py-1 text-[10px] sm:text-xs font-bold uppercase rounded border transition-all ${t.button}`}>
-               {theme === 'pixel' ? 'THEME' : t.name}
+               {theme === 'pixel' || theme === 'lightPixel' ? 'THEME' : t.name}
              </button>
              <div className={`flex items-center space-x-1 text-[10px] sm:text-xs font-bold ${t.textSub}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-yellow-500' : 'bg-green-500'} animate-pulse`}></span>
@@ -629,7 +672,7 @@ const App = () => {
         {/* Controls */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 gap-2 flex-shrink-0">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-hide touch-pan-x">
-            <div className={`flex p-0.5 ${t.border} ${theme === 'pixel' ? 'bg-black border-2' : 'bg-gray-100 rounded-lg border'} flex-shrink-0`}>
+            <div className={`flex p-0.5 ${t.border} ${theme === 'pixel' || theme === 'lightPixel' ? 'bg-black border-2' : 'bg-gray-100 rounded-lg border'} flex-shrink-0`}>
               <button onClick={() => setViewMode('market')} className={`px-2 py-1 text-[10px] sm:text-sm font-medium transition-all ${viewMode === 'market' ? t.buttonActive : 'text-gray-500 hover:text-gray-700'} ${t.radius}`}>Market</button>
               <button onClick={() => setViewMode('favorites')} className={`px-2 py-1 text-[10px] sm:text-sm font-medium transition-all ${viewMode === 'favorites' ? t.buttonActive : 'text-gray-500 hover:text-gray-700'} ${t.radius}`}>Favorites</button>
             </div>
