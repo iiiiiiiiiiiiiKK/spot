@@ -21,7 +21,7 @@ const GlobalStyles = () => (
     /* Mobile Scroll Fixes */
     .scroll-container {
       overscroll-behavior-y: contain;
-      touch-action: pan-y;
+      touch-action: pan-y; /* Allow vertical pan, horizontal handled by overflow */
       -webkit-overflow-scrolling: touch;
     }
   `}</style>
@@ -74,6 +74,7 @@ const THEMES = {
     loading: 'text-gray-500',
     dropdownBg: 'bg-white/95',
     shadow: 'shadow-md',
+    actionText: 'text-gray-400 hover:text-blue-500',
   },
   dark: {
     id: 'dark',
@@ -95,6 +96,7 @@ const THEMES = {
     loading: 'text-gray-400',
     dropdownBg: 'bg-gray-800/95',
     shadow: 'shadow-xl shadow-black/50',
+    actionText: 'text-gray-500 hover:text-blue-400',
   },
   pixel: {
     id: 'pixel',
@@ -116,6 +118,7 @@ const THEMES = {
     loading: 'text-green-500 animate-pulse',
     dropdownBg: 'bg-slate-900 border-4 border-green-500',
     shadow: 'shadow-none',
+    actionText: 'text-green-700 hover:text-green-300',
   }
 };
 
@@ -204,20 +207,17 @@ class BinanceService {
 
         if (klines && Array.isArray(klines) && klines.length >= 8) {
              const currentPrice = item.price;
-             
              const index7d = klines.length - 1 - 7; 
              if (index7d >= 0) {
                  const close7d = parseFloat(klines[index7d][4]);
                  if (close7d > 0) item.changePercent7d = ((currentPrice - close7d) / close7d) * 100;
              }
-
              const index30d = klines.length - 1 - 30;
              if (index30d >= 0) {
                  const close30d = parseFloat(klines[index30d][4]);
                  if (close30d > 0) item.changePercent30d = ((currentPrice - close30d) / close30d) * 100;
              }
         }
-
         this.tickerMap.set(symbol, item);
         this.notify();
       }
@@ -370,20 +370,22 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
         
         {/* Distributed Columns */}
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change1h')}>1h<SortIcon field="change1h" /></button>
-        <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
+        
+        {/* 4h: pr-[5px] */}
+        <button className="flex-1 px-0.5 pr-[5px] text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
         
         {/* 24h Fixed Width Column */}
         <button className="w-[55px] sm:w-24 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change24h')}>24h<SortIcon field="change24h" /></button>
         
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change7d')}>7d<SortIcon field="change7d" /></button>
         
-        {/* 30d with right padding */}
-        <button className="flex-1 px-0.5 pr-[3px] text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change30d')}>30d<SortIcon field="change30d" /></button>
+        {/* 30d: Dynamic Padding */}
+        <button className={`flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80 ${theme === 'pixel' ? 'pr-[5px]' : 'pr-[2px]'}`} onClick={() => handleSort('change30d')}>30d<SortIcon field="change30d" /></button>
       </div>
 
-      {/* Table Body */}
-      <div ref={containerRef} className={`flex-1 overflow-y-auto relative scroll-container ${theme === 'pixel' ? 'pixel' : theme === 'dark' ? 'dark' : ''}`}>
-        <div style={{ height: totalHeight, position: 'relative' }}>
+      {/* Table Body - Added overflow-x-auto for links sliding */}
+      <div ref={containerRef} className={`flex-1 overflow-y-auto overflow-x-auto relative scroll-container ${theme === 'pixel' ? 'pixel' : theme === 'dark' ? 'dark' : ''}`}>
+        <div style={{ height: totalHeight, position: 'relative', minWidth: '100%' }}>
           {visibleData.map((item: any, index: number) => {
             const quoteAsset = getQuoteAsset(item.symbol);
             const baseAsset = quoteAsset ? item.symbol.substring(0, item.symbol.length - quoteAsset.length) : item.symbol;
@@ -391,7 +393,7 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
             const isFav = favorites.has(item.symbol);
 
             // Cell Renderer
-            const renderPctCell = (val: number | undefined, isBoxed = false, isFlex = true, isLast = false) => {
+            const renderPctCell = (val: number | undefined, isBoxed = false, isFlex = true, customPadding = 'px-0.5') => {
                 const color = theme === 'pixel' 
                    ? (val !== undefined && val > 0 ? '#00aa00' : '#aa0000') 
                    : (val !== undefined && val > 0 ? '#10b981' : '#ef4444');
@@ -401,27 +403,24 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                    ? { backgroundColor: getHeatmapColor(val, theme as ThemeMode), color: theme === 'pixel' ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937') }
                    : { color };
                 
-                // Width & Wrapper
                 const wrapperClass = isBoxed ? 'w-[55px] sm:w-24' : (isFlex ? 'flex-1' : 'w-auto');
-                // Right padding for last column (30d)
-                const paddingClass = isLast ? 'pr-[3px]' : 'px-0.5'; 
                 
                 // Inner Text Styling
                 let innerClass = 'w-full ';
                 if (isBoxed) {
-                  // Pixel Theme: Smaller, Compact
+                  // Pixel: Compact Left/Right. Light/Dark: Centered.
                   if (theme === 'pixel') {
                     innerClass += 'rounded py-0.5 font-bold text-[8px] sm:text-xs text-right';
                   } else {
-                    // Light/Dark Theme: Centered text for 24h
-                    innerClass += `rounded py-1 font-bold text-[9px] sm:text-xs ${theme === 'light' ? 'text-center' : 'text-right'}`;
+                    innerClass += `rounded py-1 font-bold text-[9px] sm:text-xs text-center`;
                   }
                 } else {
-                  innerClass += 'text-[9px] sm:text-xs font-mono text-right';
+                  // ALL Bold for 1h, 4h, 7d, 30d
+                  innerClass += 'text-[9px] sm:text-xs font-mono font-bold text-right';
                 }
 
                 return (
-                    <div className={`${wrapperClass} ${paddingClass} sm:px-1 h-full flex items-center justify-end`}>
+                    <div className={`${wrapperClass} ${customPadding} sm:px-1 h-full flex items-center justify-end`}>
                         <div className={innerClass} style={style}>
                            {val !== undefined ? `${val > 0 ? '+' : ''}${val.toFixed(isBoxed ? 2 : 1)}%` : '-'}
                         </div>
@@ -432,8 +431,8 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
             return (
               <div
                 key={item.symbol}
-                className={`absolute top-0 left-0 w-full flex items-center border-b ${t.rowBorder} ${t.rowHover} transition-colors group`}
-                style={{ height: ROW_HEIGHT, transform: `translateY(${(startIndex + index) * ROW_HEIGHT}px)` }}
+                className={`absolute top-0 left-0 w-full flex items-center border-b ${t.rowBorder} ${t.rowHover} transition-colors group pr-4`} // Added pr-4 for scroll space
+                style={{ height: ROW_HEIGHT, transform: `translateY(${(startIndex + index) * ROW_HEIGHT}px)`, minWidth: '100%' }}
               >
                 {/* Star */}
                 <div className="w-6 sm:w-10 flex items-center justify-center h-full flex-shrink-0 cursor-pointer z-10" onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.symbol); }}>
@@ -456,16 +455,27 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                   {Number(item.volume).toLocaleString(undefined, { maximumFractionDigits: 0, notation: 'compact' })}
                 </div>
                 
-                {/* 1h, 4h */}
+                {/* 1h */}
                 {renderPctCell(item.changePercent1h, false, true)}
-                {renderPctCell(item.changePercent4h, false, true)}
+                
+                {/* 4h: pr-[5px] */}
+                {renderPctCell(item.changePercent4h, false, true, 'pr-[5px]')}
 
-                {/* 24h (Boxed) */}
+                {/* 24h: Boxed */}
                 {renderPctCell(item.changePercent24h, true, false)}
 
-                {/* 7d, 30d */}
+                {/* 7d */}
                 {renderPctCell(item.changePercent7d, false, true)}
-                {renderPctCell(item.changePercent30d, false, true, true)}
+                
+                {/* 30d: dynamic padding */}
+                {renderPctCell(item.changePercent30d, false, true, theme === 'pixel' ? 'pr-[5px]' : 'pr-[2px]')}
+
+                {/* Hidden Action Links (Slide to see) */}
+                <div className="flex items-center space-x-3 pl-4 flex-shrink-0">
+                  <a href={`https://www.binance.com/en/trade/${item.symbol}`} target="_blank" rel="noreferrer" className={`text-[9px] font-bold no-underline ${t.actionText}`}>BN</a>
+                  <a href={`https://www.tradingview.com/chart/?symbol=BINANCE:${item.symbol}`} target="_blank" rel="noreferrer" className={`text-[9px] font-bold no-underline ${t.actionText}`}>TV</a>
+                  <a href={`https://twitter.com/search?q=%24${baseAsset}`} target="_blank" rel="noreferrer" className={`text-[9px] font-bold no-underline ${t.actionText}`}>X</a>
+                </div>
 
               </div>
             );
@@ -602,7 +612,7 @@ const App = () => {
                 <span className="ml-1">▼</span>
               </button>
               {isFilterOpen && (
-                // Changed from right-0 to left-0 to expand to the right
+                // Changed to left-0 to expand to the right as requested
                 <div className={`absolute top-full left-0 mt-2 w-max max-w-[90vw] md:w-[400px] ${t.dropdownBg} backdrop-blur-xl border ${t.border} ${t.radius} shadow-2xl z-50 overflow-hidden flex flex-col max-h-[50vh]`}>
                   <div className={`p-3 overflow-y-auto custom-scrollbar grid grid-cols-4 gap-2`}>
                     {availableQuoteAssets.map((asset) => (
