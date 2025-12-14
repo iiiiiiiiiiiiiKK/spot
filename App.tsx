@@ -6,9 +6,9 @@ const GlobalStyles = () => (
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
     
     /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
     
     .dark ::-webkit-scrollbar-thumb { background: #4b5563; }
@@ -53,7 +53,7 @@ const THEMES = {
     textMain: 'text-gray-700',
     textSub: 'text-gray-500',
     border: 'border-gray-200',
-    headerBg: 'bg-white/80 backdrop-blur-md',
+    headerBg: 'bg-white/90 backdrop-blur-md',
     radius: 'rounded-lg',
     font: 'font-sans',
     iconMain: 'text-gray-700',
@@ -64,7 +64,7 @@ const THEMES = {
     rowHover: 'hover:bg-gray-50',
     loading: 'text-gray-500',
     dropdownBg: 'bg-white/95',
-    shadow: 'shadow-xl', // ADDED: Soft shadow for light mode
+    shadow: 'shadow-md',
   },
   dark: {
     id: 'dark',
@@ -74,7 +74,7 @@ const THEMES = {
     textMain: 'text-gray-100',
     textSub: 'text-gray-400',
     border: 'border-gray-700',
-    headerBg: 'bg-gray-900/80 backdrop-blur-md',
+    headerBg: 'bg-gray-900/90 backdrop-blur-md',
     radius: 'rounded-lg',
     font: 'font-sans',
     iconMain: 'text-gray-200',
@@ -85,7 +85,7 @@ const THEMES = {
     rowHover: 'hover:bg-gray-700',
     loading: 'text-gray-400',
     dropdownBg: 'bg-gray-800/95',
-    shadow: 'shadow-2xl shadow-black/50', // ADDED: Deep shadow for dark mode
+    shadow: 'shadow-xl shadow-black/50',
   },
   pixel: {
     id: 'pixel',
@@ -106,7 +106,7 @@ const THEMES = {
     rowHover: 'hover:bg-green-900/30',
     loading: 'text-green-500 animate-pulse',
     dropdownBg: 'bg-slate-900 border-4 border-green-500',
-    shadow: 'shadow-none', // ADDED: No shadow for pixel mode (relies on borders)
+    shadow: 'shadow-none',
   }
 };
 
@@ -242,18 +242,15 @@ const binanceService = new BinanceService();
 
 // --- COMPONENTS ---
 
-// Helper for dynamic colors based on theme
 const getHeatmapColor = (pct: number | undefined, theme: ThemeMode) => {
   if (pct === undefined) return theme === 'dark' ? '#374151' : theme === 'pixel' ? 'transparent' : '#f3f4f6';
   
-  // Pixel Theme: High Contrast, no pastels
   if (theme === 'pixel') {
-    if (pct > 0) return '#00aa00'; // Green
-    if (pct < 0) return '#aa0000'; // Red
-    return '#555555'; // Neutral
+    if (pct > 0) return '#00aa00';
+    if (pct < 0) return '#aa0000';
+    return '#555555';
   }
 
-  // Dark Theme: Muted, darker backgrounds
   if (theme === 'dark') {
     if (pct > 30) return '#064e3b';
     if (pct > 10) return '#065f46';
@@ -263,7 +260,6 @@ const getHeatmapColor = (pct: number | undefined, theme: ThemeMode) => {
     return '#450a0a';
   }
 
-  // Light Theme: Original Pastels
   if (pct > 30) return '#7bbc81';
   if (pct > 20) return '#a3d1aa';
   if (pct > 10) return '#b1d9b9';
@@ -276,7 +272,7 @@ const getHeatmapColor = (pct: number | undefined, theme: ThemeMode) => {
   return '#e46c72';
 };
 
-const VirtualTable = ({ data, height, favorites, onToggleFavorite, onSortedIdsChange, theme }: any) => {
+const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, theme }: any) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [sortField, setSortField] = useState<SortField>('volume');
@@ -304,8 +300,9 @@ const VirtualTable = ({ data, height, favorites, onToggleFavorite, onSortedIdsCh
 
   useEffect(() => { onSortedIdsChange?.(sortedData.map((d: any) => d.symbol)); }, [sortedData, onSortedIdsChange]);
 
-  const ROW_HEIGHT = theme === 'pixel' ? 56 : 48; // Taller rows for pixel font
-  const HEADER_HEIGHT = 48;
+  const ROW_HEIGHT = theme === 'pixel' ? 56 : 50;
+  const HEADER_HEIGHT = 44;
+  const totalHeight = sortedData.length * ROW_HEIGHT;
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 10);
   const visibleCount = Math.ceil((containerRef.current?.clientHeight || 600) / ROW_HEIGHT) + 20;
   const visibleData = sortedData.slice(startIndex, startIndex + visibleCount);
@@ -320,21 +317,21 @@ const VirtualTable = ({ data, height, favorites, onToggleFavorite, onSortedIdsCh
   );
 
   return (
-    <div className={`flex flex-col border ${t.border} ${t.radius} overflow-hidden ${t.card} ${t.shadow} h-full w-full ${t.font}`}>
-      {/* Header */}
-      <div className={`flex items-center ${t.bg} border-b ${t.border} text-xs font-semibold uppercase tracking-wider ${t.textSub} sticky top-0 z-10`} style={{ height: HEADER_HEIGHT, minHeight: HEADER_HEIGHT }}>
-        <div className="w-8 md:w-10 flex-shrink-0"></div>
-        <button className="flex-1 px-2 text-left h-full flex items-center hover:opacity-80" onClick={() => handleSort('symbol')}>Token <SortIcon field="symbol" /></button>
-        <button className="w-24 sm:w-32 md:w-52 px-2 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('price')}>Price <SortIcon field="price" /></button>
-        <button className="hidden md:flex w-40 px-4 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('volume')}>Vol(24h) <SortIcon field="volume" /></button>
-        <button className="hidden lg:flex w-24 px-2 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('change1h')}>1h <SortIcon field="change1h" /></button>
-        <button className="hidden lg:flex w-24 px-2 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h <SortIcon field="change4h" /></button>
-        <button className="w-20 md:w-24 px-2 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change24h')}>24h <SortIcon field="change24h" /></button>
+    <div className={`flex flex-col border ${t.border} ${t.radius} overflow-hidden ${t.card} ${t.shadow} w-full h-full ${t.font}`}>
+      {/* Table Header */}
+      <div className={`flex items-center ${t.bg} border-b ${t.border} text-[10px] sm:text-xs font-semibold uppercase tracking-wider ${t.textSub} flex-shrink-0 z-10`} style={{ height: HEADER_HEIGHT }}>
+        <div className="w-8 sm:w-10 flex-shrink-0"></div>
+        <button className="flex-1 px-1 sm:px-2 text-left h-full flex items-center hover:opacity-80" onClick={() => handleSort('symbol')}>Token<SortIcon field="symbol" /></button>
+        <button className="w-20 sm:w-32 px-1 sm:px-2 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('price')}>Price<SortIcon field="price" /></button>
+        <button className="hidden sm:flex w-24 md:w-36 lg:w-40 px-2 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('volume')}>Vol<span className="hidden md:inline">(24h)</span><SortIcon field="volume" /></button>
+        <button className="hidden lg:flex w-20 px-2 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('change1h')}>1h<SortIcon field="change1h" /></button>
+        <button className="hidden xl:flex w-20 px-2 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
+        <button className="w-16 sm:w-24 px-1 sm:px-2 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change24h')}>24h<SortIcon field="change24h" /></button>
       </div>
 
-      {/* Body */}
-      <div ref={containerRef} className={`flex-1 overflow-y-auto relative custom-scrollbar ${theme === 'pixel' ? 'pixel' : theme === 'dark' ? 'dark' : ''}`} style={{ height: `calc(${height} - ${HEADER_HEIGHT}px)` }}>
-        <div style={{ height: sortedData.length * ROW_HEIGHT, position: 'relative' }}>
+      {/* Table Body */}
+      <div ref={containerRef} className={`flex-1 overflow-y-auto relative custom-scrollbar ${theme === 'pixel' ? 'pixel' : theme === 'dark' ? 'dark' : ''}`}>
+        <div style={{ height: totalHeight, position: 'relative' }}>
           {visibleData.map((item: any, index: number) => {
             const quoteAsset = getQuoteAsset(item.symbol);
             const baseAsset = quoteAsset ? item.symbol.substring(0, item.symbol.length - quoteAsset.length) : item.symbol;
@@ -347,33 +344,43 @@ const VirtualTable = ({ data, height, favorites, onToggleFavorite, onSortedIdsCh
                 className={`absolute top-0 left-0 w-full flex items-center border-b ${t.rowBorder} ${t.rowHover} transition-colors group`}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${(startIndex + index) * ROW_HEIGHT}px)` }}
               >
-                <div className="w-8 md:w-10 flex items-center justify-center h-full flex-shrink-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.symbol); }}>
-                  <span className={isFav ? 'text-yellow-400' : 'text-gray-300'}>★</span>
+                <div className="w-8 sm:w-10 flex items-center justify-center h-full flex-shrink-0 cursor-pointer z-10" onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.symbol); }}>
+                  <span className={`text-sm ${isFav ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`}>★</span>
                 </div>
-                <div className={`flex-1 px-2 flex items-center min-w-0 h-full ${t.textMain}`}>
-                  <span className="font-semibold truncate">{baseAsset}</span>
-                  <span className={`text-xs ml-0.5 ${t.textSub} hidden sm:inline`}>{displayQuote}</span>
+                
+                <div className={`flex-1 px-1 sm:px-2 flex items-center min-w-0 h-full ${t.textMain}`}>
+                  <span className="font-bold text-xs sm:text-sm truncate">{baseAsset}</span>
+                  <span className={`text-[10px] ml-0.5 ${t.textSub} hidden sm:inline opacity-70`}>{displayQuote}</span>
                 </div>
-                <div className={`w-24 sm:w-32 md:w-52 px-2 text-right font-mono h-full flex items-center justify-end ${t.textMain}`}>
+                
+                <div className={`w-20 sm:w-32 px-1 sm:px-2 text-right font-mono text-xs sm:text-sm h-full flex items-center justify-end ${t.textMain}`}>
                   {item.price < 1 ? item.price.toFixed(6) : item.price.toFixed(2)}
                 </div>
-                <div className={`hidden md:flex w-40 px-4 text-right font-mono h-full items-center justify-end ${t.textSub}`}>
+                
+                <div className={`hidden sm:flex w-24 md:w-36 lg:w-40 px-2 text-right font-mono text-xs h-full items-center justify-end ${t.textSub}`}>
                   {Number(item.volume).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </div>
-                {['changePercent1h', 'changePercent4h', 'changePercent24h'].map((key) => {
-                  const val = item[key];
-                  const bg = getHeatmapColor(val, theme as ThemeMode);
-                  const isHidden = key !== 'changePercent24h';
-                  return (
-                    <div 
-                      key={key}
-                      className={`${isHidden ? 'hidden lg:flex' : 'flex'} ${key === 'changePercent24h' ? 'w-20 md:w-24' : 'w-24'} px-2 h-full items-center justify-end font-mono`}
-                      style={{ backgroundColor: bg, color: theme === 'pixel' ? '#000' : (theme === 'dark' ? '#eee' : '#374151') }}
-                    >
-                      {val !== undefined ? `${val > 0 ? '+' : ''}${val.toFixed(2)}%` : '-'}
-                    </div>
-                  );
-                })}
+                
+                <div className={`hidden lg:flex w-20 px-2 h-full items-center justify-end font-mono text-xs`} 
+                     style={{ color: theme === 'pixel' ? (item.changePercent1h > 0 ? '#00aa00' : '#aa0000') : (item.changePercent1h > 0 ? '#10b981' : '#ef4444') }}>
+                   {item.changePercent1h ? `${item.changePercent1h > 0 ? '+' : ''}${item.changePercent1h.toFixed(2)}%` : '-'}
+                </div>
+                
+                <div className={`hidden xl:flex w-20 px-2 h-full items-center justify-end font-mono text-xs`}
+                     style={{ color: theme === 'pixel' ? (item.changePercent4h > 0 ? '#00aa00' : '#aa0000') : (item.changePercent4h > 0 ? '#10b981' : '#ef4444') }}>
+                   {item.changePercent4h ? `${item.changePercent4h > 0 ? '+' : ''}${item.changePercent4h.toFixed(2)}%` : '-'}
+                </div>
+
+                <div className="w-16 sm:w-24 px-1 sm:px-2 h-full flex items-center justify-end">
+                   <div className="w-full py-1 text-center rounded font-mono text-[10px] sm:text-xs font-bold"
+                     style={{ 
+                       backgroundColor: getHeatmapColor(item.changePercent24h, theme as ThemeMode),
+                       color: theme === 'pixel' ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937')
+                     }}
+                   >
+                     {item.changePercent24h > 0 ? '+' : ''}{item.changePercent24h.toFixed(2)}%
+                   </div>
+                </div>
               </div>
             );
           })}
@@ -393,19 +400,15 @@ const App = () => {
   const [viewMode, setViewMode] = useState<'market' | 'favorites'>('market');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [sortedSymbols, setSortedSymbols] = useState<string[]>([]);
-  
-  // Theme State
   const [theme, setTheme] = useState<ThemeMode>('light');
+  
   const t = THEMES[theme];
-
   const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Load favorites
     const saved = localStorage.getItem('binance_favorites');
     if (saved) try { setFavorites(new Set(JSON.parse(saved))); } catch (e) {}
     
-    // Connect Service
     binanceService.connect();
     const sub = binanceService.subscribe((data) => {
       setTickerDataMap(data);
@@ -422,7 +425,6 @@ const App = () => {
     localStorage.setItem('binance_favorites', JSON.stringify(Array.from(favorites)));
   }, [favorites]);
 
-  // Lazy load extra data
   useEffect(() => {
     if (!sortedSymbols.length) return;
     const interval = setInterval(() => {
@@ -463,78 +465,66 @@ const App = () => {
     return data;
   }, [tickerDataMap, selectedAssets, searchQuery, viewMode, favorites]);
 
-  const stats = useMemo(() => ({
-    total: filteredData.length,
-    up: filteredData.filter(t => t.changePercent24h > 0).length,
-    down: filteredData.filter(t => t.changePercent24h < 0).length
-  }), [filteredData]);
-
   const toggleTheme = () => {
     const cycle: ThemeMode[] = ['light', 'dark', 'pixel'];
     setTheme(cycle[(cycle.indexOf(theme) + 1) % cycle.length]);
   };
 
   return (
-    <div className={`min-h-screen flex flex-col items-center transition-colors duration-300 ${t.bg} ${t.font}`}>
+    // Use 100dvh for better mobile browser support (address bar handling)
+    <div className={`h-[100dvh] w-full flex flex-col items-center transition-colors duration-300 ${t.bg} ${t.font} overflow-hidden`}>
       <GlobalStyles />
       
-      {/* Header */}
-      <header className={`w-full ${t.headerBg} border-b ${t.border} sticky top-0 z-20`}>
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-             <h1 className={`text-xl font-bold tracking-tight ${t.textMain}`}>
-               {theme === 'pixel' ? 'BINANCE_MARKET_V1.0' : 'Binance Spot Market'}
+      {/* Header - Fixed Height */}
+      <header className={`w-full flex-shrink-0 ${t.headerBg} border-b ${t.border} z-20`}>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+             <h1 className={`text-sm sm:text-xl font-bold tracking-tight ${t.textMain} truncate`}>
+               {theme === 'pixel' ? 'MARKET_V1' : 'Binance Spot'}
              </h1>
           </div>
           
-          <div className="flex items-center space-x-4">
-             {/* THEME TOGGLE BUTTON */}
-             <button 
-               onClick={toggleTheme}
-               className={`px-3 py-1.5 text-xs font-bold uppercase rounded border transition-all ${t.button}`}
-             >
-               {theme === 'pixel' ? '[ THEME: PIXEL ]' : `Theme: ${t.name}`}
+          <div className="flex items-center space-x-2 sm:space-x-4">
+             <button onClick={toggleTheme} className={`px-2 py-1 text-[10px] sm:text-xs font-bold uppercase rounded border transition-all ${t.button}`}>
+               {theme === 'pixel' ? '[THEME]' : t.name}
              </button>
 
-             <div className={`hidden md:flex items-center space-x-2 text-xs font-bold ${t.textSub}`}>
-                <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-yellow-500' : 'bg-green-500'} animate-pulse`}></span>
-                <span className={isLoading ? "text-yellow-600" : "text-green-600"}>
-                  {isLoading ? 'SYNCING...' : 'LIVE'}
-                </span>
+             <div className={`flex items-center space-x-1 sm:space-x-2 text-[10px] sm:text-xs font-bold ${t.textSub}`}>
+                <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isLoading ? 'bg-yellow-500' : 'bg-green-500'} animate-pulse`}></span>
+                <span className="hidden sm:inline">{isLoading ? 'SYNCING' : 'LIVE'}</span>
              </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="w-full max-w-7xl mx-auto px-4 py-8 flex-1 flex flex-col h-[calc(100vh-64px)]">
+      {/* Main Content - Flex Grow to fill remaining space */}
+      <main className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-4 flex-1 flex flex-col min-h-0">
         
-        {/* Controls */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
-          <div className="flex items-center gap-4">
-            <div className={`flex p-1 ${t.border} ${theme === 'pixel' ? 'bg-black border-2' : 'bg-gray-100 rounded-lg border'}`}>
-              <button onClick={() => setViewMode('market')} className={`px-4 py-1.5 text-sm font-medium transition-all ${viewMode === 'market' ? t.buttonActive : 'text-gray-500 hover:text-gray-700'} ${t.radius}`}>Market</button>
-              <button onClick={() => setViewMode('favorites')} className={`px-4 py-1.5 text-sm font-medium transition-all ${viewMode === 'favorites' ? t.buttonActive : 'text-gray-500 hover:text-gray-700'} ${t.radius}`}>Favorites</button>
+        {/* Controls Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-3 gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
+            <div className={`flex p-1 ${t.border} ${theme === 'pixel' ? 'bg-black border-2' : 'bg-gray-100 rounded-lg border'} flex-shrink-0`}>
+              <button onClick={() => setViewMode('market')} className={`px-3 py-1 text-xs sm:text-sm font-medium transition-all ${viewMode === 'market' ? t.buttonActive : 'text-gray-500 hover:text-gray-700'} ${t.radius}`}>Market</button>
+              <button onClick={() => setViewMode('favorites')} className={`px-3 py-1 text-xs sm:text-sm font-medium transition-all ${viewMode === 'favorites' ? t.buttonActive : 'text-gray-500 hover:text-gray-700'} ${t.radius}`}>Favorites</button>
             </div>
-            <div className={`hidden lg:flex items-center space-x-4 text-sm ${t.textSub}`}>
-              <span>Total: {stats.total}</span>
+            <div className={`hidden md:flex items-center text-xs ${t.textSub}`}>
+              <span>Count: {filteredData.length}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="relative" ref={filterRef}>
-              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`flex items-center justify-between w-full md:w-48 px-4 py-2 border ${t.border} ${t.radius} text-sm transition-all ${isFilterOpen ? t.bg : t.button} ${t.textMain}`}>
-                <span className="truncate">{selectedAssets.includes('ALL') ? 'All Markets' : selectedAssets.join(', ')}</span>
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="relative flex-1 md:flex-none md:w-40" ref={filterRef}>
+              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`flex items-center justify-between w-full px-3 py-1.5 sm:py-2 border ${t.border} ${t.radius} text-xs sm:text-sm transition-all ${isFilterOpen ? t.bg : t.button} ${t.textMain}`}>
+                <span className="truncate">{selectedAssets.includes('ALL') ? 'All' : selectedAssets.join(', ')}</span>
                 <span className="ml-2">▼</span>
               </button>
               {isFilterOpen && (
-                <div className={`absolute top-full right-0 mt-2 w-[90vw] md:w-[480px] ${t.dropdownBg} backdrop-blur-xl border ${t.border} ${t.radius} shadow-2xl z-50 overflow-hidden flex flex-col max-h-[60vh]`}>
-                  <div className={`p-4 overflow-y-auto custom-scrollbar grid grid-cols-3 sm:grid-cols-4 gap-2`}>
+                <div className={`absolute top-full left-0 md:left-auto md:right-0 mt-2 w-[80vw] md:w-[400px] ${t.dropdownBg} backdrop-blur-xl border ${t.border} ${t.radius} shadow-2xl z-50 overflow-hidden flex flex-col max-h-[50vh]`}>
+                  <div className={`p-3 overflow-y-auto custom-scrollbar grid grid-cols-3 sm:grid-cols-4 gap-2`}>
                     {availableQuoteAssets.map((asset) => (
                        <button key={asset} onClick={() => setSelectedAssets(prev => asset === 'ALL' ? ['ALL'] : prev.includes('ALL') ? [asset] : prev.includes(asset) ? (prev.length === 1 ? ['ALL'] : prev.filter(a => a !== asset)) : [...prev, asset])} 
-                         className={`flex flex-col items-center justify-center p-2 border ${t.radius} text-xs transition-all ${selectedAssets.includes(asset) ? t.buttonActive : t.button}`}>
+                         className={`flex flex-col items-center justify-center p-2 border ${t.radius} text-[10px] sm:text-xs transition-all ${selectedAssets.includes(asset) ? t.buttonActive : t.button}`}>
                          <span className="font-bold">{asset}</span>
-                         <span className="opacity-60">{assetCounts[asset] || 0}</span>
                        </button>
                     ))}
                   </div>
@@ -544,28 +534,28 @@ const App = () => {
 
             <input 
               type="text" 
-              className={`block w-full md:w-64 px-3 py-2 border ${t.border} ${t.radius} ${t.bg} ${t.textMain} placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-current`}
-              placeholder={theme === 'pixel' ? 'SEARCH_TOKEN...' : 'Search Token...'}
+              className={`block w-full md:w-56 px-3 py-1.5 sm:py-2 text-xs sm:text-sm border ${t.border} ${t.radius} ${t.bg} ${t.textMain} placeholder-gray-500 focus:outline-none`}
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Table */}
-        <div className="flex-1 w-full relative">
+        {/* Table Container - Flex 1 to fill height */}
+        <div className="flex-1 w-full relative min-h-0">
           {isLoading && tickerDataMap.size === 0 ? (
             <div className={`absolute inset-0 flex items-center justify-center ${t.card} z-10 ${t.radius} border ${t.border}`}>
                <div className={`flex flex-col items-center ${t.loading}`}>
                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current mb-2"></div>
-                 <span className="text-sm">Loading Data...</span>
+                 <span className="text-xs sm:text-sm">Connecting...</span>
                </div>
             </div>
           ) : filteredData.length > 0 ? (
-            <VirtualTable data={filteredData} height="100%" favorites={favorites} onToggleFavorite={(s: string) => setFavorites(prev => { const n = new Set(prev); if (n.has(s)) n.delete(s); else n.add(s); return n; })} onSortedIdsChange={setSortedSymbols} theme={theme} />
+            <VirtualTable data={filteredData} favorites={favorites} onToggleFavorite={(s: string) => setFavorites(prev => { const n = new Set(prev); if (n.has(s)) n.delete(s); else n.add(s); return n; })} onSortedIdsChange={setSortedSymbols} theme={theme} />
           ) : (
              <div className={`absolute inset-0 flex flex-col items-center justify-center ${t.textSub} ${t.card} border ${t.border} ${t.radius}`}>
-               <p className="text-lg font-medium">{viewMode === 'favorites' ? 'No Favorites Yet' : 'No Markets Found'}</p>
+               <p className="text-sm sm:text-lg font-medium">No Data Found</p>
              </div>
           )}
         </div>
