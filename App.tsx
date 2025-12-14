@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+
 // --- STYLES & FONTS INJECTION ---
 const GlobalStyles = () => (
   <style>{`
@@ -63,6 +64,7 @@ const THEMES = {
     rowHover: 'hover:bg-gray-50',
     loading: 'text-gray-500',
     dropdownBg: 'bg-white/95',
+    shadow: 'shadow-xl', // ADDED: Soft shadow for light mode
   },
   dark: {
     id: 'dark',
@@ -83,6 +85,7 @@ const THEMES = {
     rowHover: 'hover:bg-gray-700',
     loading: 'text-gray-400',
     dropdownBg: 'bg-gray-800/95',
+    shadow: 'shadow-2xl shadow-black/50', // ADDED: Deep shadow for dark mode
   },
   pixel: {
     id: 'pixel',
@@ -103,6 +106,7 @@ const THEMES = {
     rowHover: 'hover:bg-green-900/30',
     loading: 'text-green-500 animate-pulse',
     dropdownBg: 'bg-slate-900 border-4 border-green-500',
+    shadow: 'shadow-none', // ADDED: No shadow for pixel mode (relies on borders)
   }
 };
 
