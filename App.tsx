@@ -59,7 +59,7 @@ const THEMES = {
     name: 'Light',
     bg: 'bg-gray-50',
     card: 'bg-white',
-    textMain: 'text-gray-700',
+    textMain: 'text-gray-800', // Darker for better contrast
     textSub: 'text-gray-500',
     border: 'border-gray-200',
     headerBg: 'bg-white/95 backdrop-blur-md',
@@ -137,9 +137,8 @@ class BinanceService {
   private pendingFetches: Set<string> = new Set();
   
   private BASE_WS_URLS = [
-    `wss://data-stream.binance.vision/stream?streams=!ticker@arr/!ticker_1h@arr/!ticker_4h@arr`,
-    `wss://stream.binance.com:443/stream?streams=!ticker@arr/!ticker_1h@arr/!ticker_4h@arr`,
-    `wss://stream.binance.com:9443/stream?streams=!ticker@arr/!ticker_1h@arr/!ticker_4h@arr`,
+    `wss://data-stream.binance.vision/stream?streams=!ticker@arr`,
+    `wss://stream.binance.com:9443/stream?streams=!ticker@arr`,
   ];
 
   public connect() {
@@ -148,7 +147,7 @@ class BinanceService {
   }
 
   private async fetchInitialSnapshot() {
-    const domains = ['https://data-api.binance.vision', 'https://api.binance.com', 'https://api-gcp.binance.com'];
+    const domains = ['https://data-api.binance.vision', 'https://api.binance.com'];
     for (const domain of domains) {
       try {
         const [tickerRes, infoRes] = await Promise.all([
@@ -186,32 +185,54 @@ class BinanceService {
     if (this.pendingFetches.has(symbol)) return;
     this.pendingFetches.add(symbol);
     try {
-      const baseUrl = 'https://data-api.binance.vision/api/v3/ticker';
-      const results = await Promise.allSettled([
-        fetch(`${baseUrl}?symbol=${symbol}&windowSize=1h`).then(r => r.json()),
-        fetch(`${baseUrl}?symbol=${symbol}&windowSize=4h`).then(r => r.json()),
-        fetch(`${baseUrl}?symbol=${symbol}&windowSize=7d`).then(r => r.json()),
-        fetch(`${baseUrl}?symbol=${symbol}&windowSize=30d`).then(r => r.json())
+      const baseUrl = 'https://data-api.binance.vision/api/v3';
+      
+      // 1. Fetch 1h and 4h ticker stats (Efficient)
+      const tickerStatsPromise = Promise.all([
+         fetch(`${baseUrl}/ticker?symbol=${symbol}&windowSize=1h`).then(r => r.ok ? r.json() : null),
+         fetch(`${baseUrl}/ticker?symbol=${symbol}&windowSize=4h`).then(r => r.ok ? r.json() : null)
       ]);
+
+      // 2. Fetch Klines (Candles) for 7d and 30d calculation (Reliable)
+      // Fetch 32 daily candles to cover 30 days ago
+      const klinePromise = fetch(`${baseUrl}/klines?symbol=${symbol}&interval=1d&limit=32`).then(r => r.ok ? r.json() : null);
+
+      const [tickerResults, klines] = await Promise.all([tickerStatsPromise, klinePromise]);
+      const [res1h, res4h] = tickerResults;
 
       const item = this.tickerMap.get(symbol);
       if (item) {
-        if (results[0].status === 'fulfilled' && results[0].value?.priceChangePercent) 
-          item.changePercent1h = parseFloat(results[0].value.priceChangePercent);
-        
-        if (results[1].status === 'fulfilled' && results[1].value?.priceChangePercent) 
-          item.changePercent4h = parseFloat(results[1].value.priceChangePercent);
+        // Apply 1h/4h
+        if (res1h) item.changePercent1h = parseFloat(res1h.priceChangePercent);
+        if (res4h) item.changePercent4h = parseFloat(res4h.priceChangePercent);
 
-        if (results[2].status === 'fulfilled' && results[2].value?.priceChangePercent) 
-          item.changePercent7d = parseFloat(results[2].value.priceChangePercent);
+        // Calculate 7d and 30d from Klines
+        // Kline format: [Time, Open, High, Low, Close, ...]
+        if (klines && Array.isArray(klines) && klines.length >= 8) {
+             const currentPrice = item.price; // Use live price
+             
+             // 7 Days ago: 
+             // We want the CLOSE price of the candle 7 days ago.
+             // If we have 32 candles, index [last-1] is yesterday.
+             const index7d = klines.length - 1 - 7; 
+             if (index7d >= 0) {
+                 const close7d = parseFloat(klines[index7d][4]);
+                 if (close7d > 0) item.changePercent7d = ((currentPrice - close7d) / close7d) * 100;
+             }
 
-        if (results[3].status === 'fulfilled' && results[3].value?.priceChangePercent) 
-          item.changePercent30d = parseFloat(results[3].value.priceChangePercent);
+             // 30 Days ago:
+             const index30d = klines.length - 1 - 30;
+             if (index30d >= 0) {
+                 const close30d = parseFloat(klines[index30d][4]);
+                 if (close30d > 0) item.changePercent30d = ((currentPrice - close30d) / close30d) * 100;
+             }
+        }
 
         this.tickerMap.set(symbol, item);
         this.notify();
       }
     } catch(e) {
+        console.error("Fetch stats error", e);
     } finally {
       this.pendingFetches.delete(symbol);
     }
@@ -229,17 +250,13 @@ class BinanceService {
         const msg: BinanceStreamMessage = JSON.parse(event.data);
         if (!msg.data) return;
         const data = Array.isArray(msg.data) ? msg.data : [msg.data];
-        const is1h = msg.stream.includes('1h');
-        const is4h = msg.stream.includes('4h');
         
         data.forEach(item => {
           const existing = this.tickerMap.get(item.s) || { symbol: item.s, price: 0, volume: 0, changePercent24h: 0 };
-          if (!is1h && !is4h) {
-            existing.price = parseFloat(item.c);
-            existing.volume = parseFloat(item.q);
-            existing.changePercent24h = parseFloat(item.P);
-          } else if (is1h) existing.changePercent1h = parseFloat(item.P);
-          else if (is4h) existing.changePercent4h = parseFloat(item.P);
+          // Stream is usually 24h ticker
+          existing.price = parseFloat(item.c);
+          existing.volume = parseFloat(item.q);
+          existing.changePercent24h = parseFloat(item.P);
           this.tickerMap.set(item.s, existing);
         });
         this.notify();
@@ -335,8 +352,8 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
 
   useEffect(() => { onSortedIdsChange?.(sortedData.map((d: any) => d.symbol)); }, [sortedData, onSortedIdsChange]);
 
-  const ROW_HEIGHT = theme === 'pixel' ? 52 : 44; // Reduced row height for compact feel
-  const HEADER_HEIGHT = 40;
+  const ROW_HEIGHT = theme === 'pixel' ? 60 : 56; // Increased row height slightly for larger fonts
+  const HEADER_HEIGHT = 44;
   const totalHeight = sortedData.length * ROW_HEIGHT;
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 10);
   const visibleCount = Math.ceil((containerRef.current?.clientHeight || 600) / ROW_HEIGHT) + 20;
@@ -357,18 +374,20 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
       <div className={`flex items-center ${t.bg} border-b ${t.border} text-[10px] sm:text-xs font-semibold uppercase tracking-tight ${t.textSub} flex-shrink-0 z-10`} style={{ height: HEADER_HEIGHT }}>
         <div className="w-6 sm:w-10 flex-shrink-0"></div>
         
-        <button className="w-14 sm:w-24 px-1 text-left h-full flex items-center hover:opacity-80 truncate" onClick={() => handleSort('symbol')}>Tkn<SortIcon field="symbol" /></button>
-        <button className="w-16 sm:w-28 px-1 text-right h-full flex items-center justify-end hover:opacity-80 truncate" onClick={() => handleSort('price')}>Price<SortIcon field="price" /></button>
+        <button className="w-16 sm:w-24 px-1 text-left h-full flex items-center hover:opacity-80 truncate" onClick={() => handleSort('symbol')}>Tkn<SortIcon field="symbol" /></button>
+        <button className="flex-1 px-1 text-right h-full flex items-center justify-end hover:opacity-80 truncate" onClick={() => handleSort('price')}>Price<SortIcon field="price" /></button>
         
-        {/* Hidden on Mobile to make space for stats */}
+        {/* Hidden on Mobile */}
         <button className="hidden md:flex w-24 px-2 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('volume')}>Vol<SortIcon field="volume" /></button>
         
-        {/* All Time Periods - Distributed with flex-1 for mobile */}
-        <button className="flex-1 px-0.5 sm:px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change1h')}>1h<SortIcon field="change1h" /></button>
-        <button className="flex-1 px-0.5 sm:px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
-        <button className="flex-1 px-0.5 sm:px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change24h')}>1d<SortIcon field="change24h" /></button>
-        <button className="flex-1 px-0.5 sm:px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change7d')}>7d<SortIcon field="change7d" /></button>
-        <button className="flex-1 px-0.5 sm:px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change30d')}>30d<SortIcon field="change30d" /></button>
+        {/* Hidden on Mobile (1h/4h) */}
+        <button className="hidden sm:flex w-16 px-1 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('change1h')}>1h<SortIcon field="change1h" /></button>
+        <button className="hidden sm:flex w-16 px-1 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
+        
+        {/* Visible Columns */}
+        <button className="w-20 sm:w-24 px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change24h')}>24h<SortIcon field="change24h" /></button>
+        <button className="w-12 sm:w-16 px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change7d')}>7d<SortIcon field="change7d" /></button>
+        <button className="w-12 sm:w-16 px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change30d')}>30d<SortIcon field="change30d" /></button>
       </div>
 
       {/* Table Body */}
@@ -381,21 +400,25 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
             const isFav = favorites.has(item.symbol);
 
             // Compact Cell Renderer
-            const renderPctCell = (val: number | undefined, isHighlight = false) => {
+            const renderPctCell = (val: number | undefined, widthClass: string, isHighlight = false, hiddenClass = '') => {
                 const color = theme === 'pixel' 
                    ? (val !== undefined && val > 0 ? '#00aa00' : '#aa0000') 
                    : (val !== undefined && val > 0 ? '#10b981' : '#ef4444');
                 
-                // For '1d', we might want a background highlight on desktop, but keep it minimal on mobile
-                const style = isHighlight && theme !== 'pixel' && window.innerWidth > 640 
-                   ? { backgroundColor: getHeatmapColor(val, theme as ThemeMode), color: theme === 'dark' ? '#f3f4f6' : '#1f2937' }
+                // Highlight Logic
+                const style = isHighlight 
+                   ? { backgroundColor: getHeatmapColor(val, theme as ThemeMode), color: theme === 'pixel' ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937') }
                    : { color };
                 
-                const roundedClass = isHighlight && window.innerWidth > 640 ? 'rounded py-1 font-bold' : '';
+                const roundedClass = isHighlight ? 'rounded py-1.5' : '';
+                // Font Size Logic: Highlighted gets BIGGER font
+                const fontClass = isHighlight ? 'text-sm sm:text-base font-bold' : 'text-[10px] sm:text-xs font-mono';
 
                 return (
-                    <div className={`flex-1 px-0.5 sm:px-1 h-full flex items-center justify-end font-mono text-[10px] sm:text-xs ${roundedClass}`} style={style}>
-                       {val !== undefined ? `${val > 0 ? '+' : ''}${val.toFixed(0)}%` : '-'}
+                    <div className={`${widthClass} ${hiddenClass} px-0.5 sm:px-1 h-full flex items-center justify-end`} >
+                        <div className={`w-full text-right ${fontClass} ${roundedClass}`} style={style}>
+                           {val !== undefined ? `${val > 0 ? '+' : ''}${val.toFixed(isHighlight ? 2 : 1)}%` : '-'}
+                        </div>
                     </div>
                 );
             };
@@ -408,33 +431,35 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
               >
                 {/* Star */}
                 <div className="w-6 sm:w-10 flex items-center justify-center h-full flex-shrink-0 cursor-pointer z-10" onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.symbol); }}>
-                  <span className={`text-[10px] sm:text-sm ${isFav ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`}>★</span>
+                  <span className={`text-sm ${isFav ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`}>★</span>
                 </div>
                 
-                {/* Symbol (Fixed Width) */}
-                <div className={`w-14 sm:w-24 px-1 flex items-center h-full ${t.textMain} overflow-hidden`}>
-                  <div className="flex flex-col sm:flex-row sm:items-baseline truncate w-full">
-                     <span className="font-bold text-[10px] sm:text-sm truncate">{baseAsset}</span>
-                     <span className={`text-[8px] sm:text-[10px] sm:ml-0.5 ${t.textSub} opacity-70 truncate`}>{displayQuote}</span>
-                  </div>
+                {/* Symbol */}
+                <div className={`w-16 sm:w-24 px-1 flex flex-col justify-center h-full ${t.textMain} overflow-hidden`}>
+                     <span className="font-bold text-xs sm:text-sm truncate">{baseAsset}</span>
+                     <span className={`text-[9px] sm:text-[10px] ${t.textSub} opacity-70 truncate`}>{displayQuote}</span>
                 </div>
                 
-                {/* Price (Fixed Width) */}
-                <div className={`w-16 sm:w-28 px-1 text-right font-mono text-[10px] sm:text-sm h-full flex items-center justify-end ${t.textMain}`}>
+                {/* Price (BIG FONT +2) */}
+                <div className={`flex-1 px-1 text-right font-mono text-sm sm:text-base font-bold h-full flex items-center justify-end ${t.textMain}`}>
                   {item.price < 1 ? item.price.toFixed(5) : item.price.toFixed(2)}
                 </div>
                 
-                {/* Volume (Hidden on Mobile) */}
+                {/* Volume (Hidden Mobile) */}
                 <div className={`hidden md:flex w-24 px-2 text-right font-mono text-xs h-full items-center justify-end ${t.textSub}`}>
                   {Number(item.volume).toLocaleString(undefined, { maximumFractionDigits: 0, notation: 'compact' })}
                 </div>
                 
-                {/* 5 Time Periods (Flex-1 for equal distribution) */}
-                {renderPctCell(item.changePercent1h)}
-                {renderPctCell(item.changePercent4h)}
-                {renderPctCell(item.changePercent24h, true)}
-                {renderPctCell(item.changePercent7d)}
-                {renderPctCell(item.changePercent30d)}
+                {/* 1h, 4h (Hidden Mobile) */}
+                {renderPctCell(item.changePercent1h, 'w-16', false, 'hidden sm:flex')}
+                {renderPctCell(item.changePercent4h, 'w-16', false, 'hidden sm:flex')}
+
+                {/* 24h (BIG FONT +2 & Highlighted) */}
+                {renderPctCell(item.changePercent24h, 'w-20 sm:w-24', true)}
+
+                {/* 7d, 30d (Small, Compact) */}
+                {renderPctCell(item.changePercent7d, 'w-12 sm:w-16', false)}
+                {renderPctCell(item.changePercent30d, 'w-12 sm:w-16', false)}
 
               </div>
             );
@@ -483,9 +508,10 @@ const App = () => {
   useEffect(() => {
     if (!sortedSymbols.length) return;
     const interval = setInterval(() => {
+      // Prioritize fetching if 7d or 30d is missing
       const target = sortedSymbols.find(s => {
         const item = tickerDataMap.get(s);
-        return item && (item.changePercent1h === undefined || item.changePercent7d === undefined);
+        return item && (item.changePercent7d === undefined || item.changePercent30d === undefined);
       });
       if (target) binanceService.fetchDetailedStats(target);
     }, 200);
@@ -564,14 +590,16 @@ const App = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="flex items-center gap-2 w-full md:w-auto relative z-30">
+            {/* Filter Dropdown */}
             <div className="relative flex-1 md:flex-none md:w-40" ref={filterRef}>
               <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`flex items-center justify-between w-full px-2 py-1 sm:py-2 border ${t.border} ${t.radius} text-[10px] sm:text-sm transition-all ${isFilterOpen ? t.bg : t.button} ${t.textMain}`}>
                 <span className="truncate">{selectedAssets.includes('ALL') ? 'All' : selectedAssets.join(', ')}</span>
                 <span className="ml-1">▼</span>
               </button>
               {isFilterOpen && (
-                <div className={`absolute top-full right-0 mt-2 w-[80vw] md:w-[400px] ${t.dropdownBg} backdrop-blur-xl border ${t.border} ${t.radius} shadow-2xl z-50 overflow-hidden flex flex-col max-h-[50vh]`}>
+                // Added right-0 and max-w to prevent overflow
+                <div className={`absolute top-full right-0 mt-2 w-max max-w-[90vw] md:w-[400px] ${t.dropdownBg} backdrop-blur-xl border ${t.border} ${t.radius} shadow-2xl z-50 overflow-hidden flex flex-col max-h-[50vh]`}>
                   <div className={`p-3 overflow-y-auto custom-scrollbar grid grid-cols-4 gap-2`}>
                     {availableQuoteAssets.map((asset) => (
                        <button key={asset} onClick={() => setSelectedAssets(prev => asset === 'ALL' ? ['ALL'] : prev.includes('ALL') ? [asset] : prev.includes(asset) ? (prev.length === 1 ? ['ALL'] : prev.filter(a => a !== asset)) : [...prev, asset])} 
