@@ -473,7 +473,7 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                 if (isBoxed) {
                     const bgColor = getHeatmapColor(val, theme as ThemeMode);
                     // For pixel themes, text inside box is black for high contrast
-                    const textColor = isPixel ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937');
+                    const textColor = theme === 'lightPixel' ? '#ffffff' : (isPixel ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937'));
                     boxStyle = { backgroundColor: bgColor, color: textColor };
                 }
 
