@@ -1,5 +1,25 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 
+// --- ICONS ---
+const IconBinance = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 32 32" className={className} fill="currentColor">
+    <path d="M16 0l-6 6 6 6 6-6-6-6zM6 6l-6 6 6 6 6-6-6-6zM26 6l-6 6 6 6 6-6-6-6zM16 12l-6 6 6 6 6-6-6-6zM6 18l-6 6 6 6 6-6-6-6zM26 18l-6 6 6 6 6-6-6-6zM16 24l-6 6 6 6 6-6-6-6z" />
+  </svg>
+);
+
+const IconTradingView = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+    <path d="M21 4H3a1 1 0 00-1 1v14a1 1 0 001 1h18a1 1 0 001-1V5a1 1 0 00-1-1zm-1 14H4V6h16v12z" />
+    <path d="M6 13h3v4H6zm4-5h3v9h-3zm4 3h3v6h-3z" />
+  </svg>
+);
+
+const IconX = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+  </svg>
+);
+
 // --- STYLES & FONTS INJECTION ---
 const GlobalStyles = () => (
   <style>{`
@@ -66,6 +86,7 @@ const THEMES = {
     radius: 'rounded-lg',
     font: 'font-sans',
     iconMain: 'text-gray-700',
+    iconHover: 'hover:text-yellow-600',
     button: 'bg-white hover:bg-gray-50 border-gray-300 text-gray-700',
     buttonActive: 'bg-black text-white border-black',
     accent: 'text-black',
@@ -86,7 +107,8 @@ const THEMES = {
     headerBg: 'bg-gray-900/95 backdrop-blur-md',
     radius: 'rounded-lg',
     font: 'font-sans',
-    iconMain: 'text-gray-200',
+    iconMain: 'text-gray-400',
+    iconHover: 'hover:text-yellow-400',
     button: 'bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-200',
     buttonActive: 'bg-gray-100 text-gray-900 border-gray-100',
     accent: 'text-white',
@@ -107,7 +129,8 @@ const THEMES = {
     headerBg: 'bg-slate-900 border-b-4 border-green-500',
     radius: 'rounded-none',
     font: "font-['Press_Start_2P'] tracking-tight text-xs",
-    iconMain: 'text-green-400',
+    iconMain: 'text-green-600',
+    iconHover: 'hover:text-green-300',
     button: 'bg-slate-900 hover:bg-green-900 border-green-600 text-green-400 border-2',
     buttonActive: 'bg-green-500 text-slate-900 border-green-500 border-2',
     accent: 'text-yellow-400',
@@ -281,7 +304,6 @@ const getHeatmapColor = (pct: number | undefined, theme: ThemeMode) => {
     return '#555555';
   }
 
-  // Dark Theme
   if (theme === 'dark') {
     if (pct > 30) return '#064e3b';
     if (pct > 10) return '#065f46';
@@ -342,7 +364,7 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
 
   useEffect(() => { onSortedIdsChange?.(sortedData.map((d: any) => d.symbol)); }, [sortedData, onSortedIdsChange]);
 
-  const ROW_HEIGHT = theme === 'pixel' ? 52 : 46; 
+  const ROW_HEIGHT = theme === 'pixel' ? 56 : 50; 
   const HEADER_HEIGHT = 40;
   const totalHeight = sortedData.length * ROW_HEIGHT;
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 10);
@@ -358,29 +380,40 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
     <span className={`ml-0.5 ${sortField !== field ? 'opacity-0' : ''}`}>{sortDirection === 'asc' ? '↑' : '↓'}</span>
   );
 
+  // --- External Links Helpers ---
+  const handleExtLink = (e: React.MouseEvent, type: 'binance' | 'tv' | 'x', symbol: string) => {
+    e.stopPropagation();
+    const q = getQuoteAsset(symbol);
+    if (!q) return;
+    const b = symbol.slice(0, symbol.length - q.length);
+    
+    let url = '';
+    if (type === 'binance') url = `https://www.binance.com/en/trade/${b}_${q}?type=spot`;
+    if (type === 'tv') url = `https://www.tradingview.com/chart/?symbol=BINANCE:${symbol}`;
+    if (type === 'x') url = `https://twitter.com/search?q=%24${b}`;
+    
+    window.open(url, '_blank');
+  };
+
   return (
     <div className={`flex flex-col border ${t.border} ${t.radius} overflow-hidden ${t.card} ${t.shadow} w-full h-full ${t.font}`}>
       {/* Table Header */}
       <div className={`flex items-center ${t.bg} border-b ${t.border} text-[9px] sm:text-xs font-semibold uppercase tracking-tight ${t.textSub} flex-shrink-0 z-10`} style={{ height: HEADER_HEIGHT }}>
         <div className="w-6 flex-shrink-0"></div>
         
-        {/* Exact widths to match Row */}
         <button className="w-16 px-0.5 text-left h-full flex items-center hover:opacity-80 truncate" onClick={() => handleSort('symbol')}>Tkn<SortIcon field="symbol" /></button>
         <button className="w-20 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80 truncate" onClick={() => handleSort('price')}>Price<SortIcon field="price" /></button>
         
-        {/* Hidden on Mobile: Volume */}
+        {/* Hidden on Mobile */}
         <button className="hidden md:flex w-24 px-2 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('volume')}>Vol<SortIcon field="volume" /></button>
         
-        {/* Distributed Columns */}
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change1h')}>1h<SortIcon field="change1h" /></button>
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
         
-        {/* 24h Fixed Width Column - Center Aligned Header */}
+        {/* 24h Centered */}
         <button className="w-14 px-0.5 text-center h-full flex items-center justify-center hover:opacity-80" onClick={() => handleSort('change24h')}>24h<SortIcon field="change24h" /></button>
         
         <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change7d')}>7d<SortIcon field="change7d" /></button>
-        
-        {/* 30d with right padding */}
         <button className="flex-1 px-0.5 pr-1.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change30d')}>30d<SortIcon field="change30d" /></button>
       </div>
 
@@ -390,7 +423,6 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
           {visibleData.map((item: any, index: number) => {
             const quoteAsset = getQuoteAsset(item.symbol);
             const baseAsset = quoteAsset ? item.symbol.substring(0, item.symbol.length - quoteAsset.length) : item.symbol;
-            const displayQuote = quoteAsset ? `/${quoteAsset}` : '';
             const isFav = favorites.has(item.symbol);
 
             // Cell Renderer
@@ -399,25 +431,19 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                    ? (val !== undefined && val > 0 ? '#00aa00' : '#aa0000') 
                    : (val !== undefined && val > 0 ? '#10b981' : '#ef4444');
                 
-                // Boxed Logic (24h)
                 const style = isBoxed 
                    ? { backgroundColor: getHeatmapColor(val, theme as ThemeMode), color: theme === 'pixel' ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937') }
                    : { color };
                 
-                // Width & Wrapper
-                // Fixed 14 (56px) for 24h to maintain consistent block size
                 const wrapperClass = isBoxed ? 'w-14' : (isFlex ? 'flex-1' : 'w-auto');
-                // Right padding for last column (30d)
                 const paddingClass = isLast ? 'pr-1.5' : 'px-0.5'; 
                 
-                // Inner Text Styling
                 let innerClass = 'w-full ';
                 if (isBoxed) {
-                  // Pixel Theme: Smaller, Compact
+                  // Consistent Box Logic for all themes
                   if (theme === 'pixel') {
                     innerClass += 'rounded py-0.5 font-bold text-[8px] sm:text-xs text-center';
                   } else {
-                    // Light AND Dark Theme: Centered text for 24h, Identical Structure
                     innerClass += 'rounded py-1 font-bold text-[9px] sm:text-xs text-center';
                   }
                 } else {
@@ -444,10 +470,23 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                   <span className={`text-xs sm:text-sm ${isFav ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`}>★</span>
                 </div>
                 
-                {/* Symbol */}
+                {/* Symbol + Action Bar */}
                 <div className={`w-16 px-0.5 flex flex-col justify-center h-full ${t.textMain} overflow-hidden`}>
-                     <span className="font-bold text-[9px] sm:text-sm truncate">{baseAsset}</span>
-                     <span className={`text-[8px] sm:text-[10px] ${t.textSub} opacity-70 truncate hidden sm:inline`}>{displayQuote}</span>
+                     <div className="flex items-baseline">
+                        <span className="font-bold text-[9px] sm:text-sm truncate">{baseAsset}</span>
+                     </div>
+                     {/* Icons Row */}
+                     <div className={`flex items-center gap-1 mt-0.5 ${t.iconMain}`}>
+                        <div onClick={(e) => handleExtLink(e, 'binance', item.symbol)} className={`cursor-pointer ${t.iconHover}`} title="Binance">
+                           <IconBinance className="w-3 h-3" />
+                        </div>
+                        <div onClick={(e) => handleExtLink(e, 'tv', item.symbol)} className={`cursor-pointer ${t.iconHover}`} title="TradingView">
+                           <IconTradingView className="w-3 h-3" />
+                        </div>
+                        <div onClick={(e) => handleExtLink(e, 'x', item.symbol)} className={`cursor-pointer ${t.iconHover}`} title="Twitter/X">
+                           <IconX className="w-3 h-3" />
+                        </div>
+                     </div>
                 </div>
                 
                 {/* Price */}
@@ -455,19 +494,19 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                   {item.price < 1 ? item.price.toFixed(5) : item.price.toFixed(2)}
                 </div>
                 
-                {/* Volume (Hidden Mobile) */}
+                {/* Volume */}
                 <div className={`hidden md:flex w-24 px-2 text-right font-mono text-xs h-full items-center justify-end ${t.textSub}`}>
                   {Number(item.volume).toLocaleString(undefined, { maximumFractionDigits: 0, notation: 'compact' })}
                 </div>
                 
-                {/* 1h, 4h */}
+                {/* Periods */}
                 {renderPctCell(item.changePercent1h, false, true)}
                 {renderPctCell(item.changePercent4h, false, true)}
 
-                {/* 24h (Boxed, Fixed Width) */}
+                {/* 24h Fixed Box */}
                 {renderPctCell(item.changePercent24h, true, false)}
 
-                {/* 7d, 30d */}
+                {/* Periods */}
                 {renderPctCell(item.changePercent7d, false, true)}
                 {renderPctCell(item.changePercent30d, false, true, true)}
 
