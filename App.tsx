@@ -59,7 +59,7 @@ const THEMES = {
     name: 'Light',
     bg: 'bg-gray-50',
     card: 'bg-white',
-    textMain: 'text-gray-800', // Darker for better contrast
+    textMain: 'text-gray-800', 
     textSub: 'text-gray-500',
     border: 'border-gray-200',
     headerBg: 'bg-white/95 backdrop-blur-md',
@@ -187,14 +187,12 @@ class BinanceService {
     try {
       const baseUrl = 'https://data-api.binance.vision/api/v3';
       
-      // 1. Fetch 1h and 4h ticker stats (Efficient)
       const tickerStatsPromise = Promise.all([
          fetch(`${baseUrl}/ticker?symbol=${symbol}&windowSize=1h`).then(r => r.ok ? r.json() : null),
          fetch(`${baseUrl}/ticker?symbol=${symbol}&windowSize=4h`).then(r => r.ok ? r.json() : null)
       ]);
 
-      // 2. Fetch Klines (Candles) for 7d and 30d calculation (Reliable)
-      // Fetch 32 daily candles to cover 30 days ago
+      // Fetch Klines for 7d/30d calculation
       const klinePromise = fetch(`${baseUrl}/klines?symbol=${symbol}&interval=1d&limit=32`).then(r => r.ok ? r.json() : null);
 
       const [tickerResults, klines] = await Promise.all([tickerStatsPromise, klinePromise]);
@@ -202,25 +200,20 @@ class BinanceService {
 
       const item = this.tickerMap.get(symbol);
       if (item) {
-        // Apply 1h/4h
         if (res1h) item.changePercent1h = parseFloat(res1h.priceChangePercent);
         if (res4h) item.changePercent4h = parseFloat(res4h.priceChangePercent);
 
-        // Calculate 7d and 30d from Klines
-        // Kline format: [Time, Open, High, Low, Close, ...]
         if (klines && Array.isArray(klines) && klines.length >= 8) {
-             const currentPrice = item.price; // Use live price
+             const currentPrice = item.price;
              
-             // 7 Days ago: 
-             // We want the CLOSE price of the candle 7 days ago.
-             // If we have 32 candles, index [last-1] is yesterday.
+             // 7 Days ago
              const index7d = klines.length - 1 - 7; 
              if (index7d >= 0) {
                  const close7d = parseFloat(klines[index7d][4]);
                  if (close7d > 0) item.changePercent7d = ((currentPrice - close7d) / close7d) * 100;
              }
 
-             // 30 Days ago:
+             // 30 Days ago
              const index30d = klines.length - 1 - 30;
              if (index30d >= 0) {
                  const close30d = parseFloat(klines[index30d][4]);
@@ -232,7 +225,7 @@ class BinanceService {
         this.notify();
       }
     } catch(e) {
-        console.error("Fetch stats error", e);
+        // ignore
     } finally {
       this.pendingFetches.delete(symbol);
     }
@@ -253,7 +246,6 @@ class BinanceService {
         
         data.forEach(item => {
           const existing = this.tickerMap.get(item.s) || { symbol: item.s, price: 0, volume: 0, changePercent24h: 0 };
-          // Stream is usually 24h ticker
           existing.price = parseFloat(item.c);
           existing.volume = parseFloat(item.q);
           existing.changePercent24h = parseFloat(item.P);
@@ -352,8 +344,8 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
 
   useEffect(() => { onSortedIdsChange?.(sortedData.map((d: any) => d.symbol)); }, [sortedData, onSortedIdsChange]);
 
-  const ROW_HEIGHT = theme === 'pixel' ? 60 : 56; // Increased row height slightly for larger fonts
-  const HEADER_HEIGHT = 44;
+  const ROW_HEIGHT = theme === 'pixel' ? 52 : 46; 
+  const HEADER_HEIGHT = 40;
   const totalHeight = sortedData.length * ROW_HEIGHT;
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 10);
   const visibleCount = Math.ceil((containerRef.current?.clientHeight || 600) / ROW_HEIGHT) + 20;
@@ -371,23 +363,24 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
   return (
     <div className={`flex flex-col border ${t.border} ${t.radius} overflow-hidden ${t.card} ${t.shadow} w-full h-full ${t.font}`}>
       {/* Table Header */}
-      <div className={`flex items-center ${t.bg} border-b ${t.border} text-[10px] sm:text-xs font-semibold uppercase tracking-tight ${t.textSub} flex-shrink-0 z-10`} style={{ height: HEADER_HEIGHT }}>
+      <div className={`flex items-center ${t.bg} border-b ${t.border} text-[9px] sm:text-xs font-semibold uppercase tracking-tight ${t.textSub} flex-shrink-0 z-10`} style={{ height: HEADER_HEIGHT }}>
         <div className="w-6 sm:w-10 flex-shrink-0"></div>
         
-        <button className="w-16 sm:w-24 px-1 text-left h-full flex items-center hover:opacity-80 truncate" onClick={() => handleSort('symbol')}>Tkn<SortIcon field="symbol" /></button>
-        <button className="flex-1 px-1 text-right h-full flex items-center justify-end hover:opacity-80 truncate" onClick={() => handleSort('price')}>Price<SortIcon field="price" /></button>
+        <button className="w-12 sm:w-24 px-0.5 text-left h-full flex items-center hover:opacity-80 truncate" onClick={() => handleSort('symbol')}>Tkn<SortIcon field="symbol" /></button>
+        <button className="w-14 sm:w-28 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80 truncate" onClick={() => handleSort('price')}>Price<SortIcon field="price" /></button>
         
-        {/* Hidden on Mobile */}
+        {/* Hidden on Mobile: Volume */}
         <button className="hidden md:flex w-24 px-2 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('volume')}>Vol<SortIcon field="volume" /></button>
         
-        {/* Hidden on Mobile (1h/4h) */}
-        <button className="hidden sm:flex w-16 px-1 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('change1h')}>1h<SortIcon field="change1h" /></button>
-        <button className="hidden sm:flex w-16 px-1 text-right h-full items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
+        {/* Distributed Columns */}
+        <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change1h')}>1h<SortIcon field="change1h" /></button>
+        <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change4h')}>4h<SortIcon field="change4h" /></button>
         
-        {/* Visible Columns */}
-        <button className="w-20 sm:w-24 px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change24h')}>24h<SortIcon field="change24h" /></button>
-        <button className="w-12 sm:w-16 px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change7d')}>7d<SortIcon field="change7d" /></button>
-        <button className="w-12 sm:w-16 px-1 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change30d')}>30d<SortIcon field="change30d" /></button>
+        {/* 24h Fixed Width Column */}
+        <button className="w-14 sm:w-24 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change24h')}>24h<SortIcon field="change24h" /></button>
+        
+        <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change7d')}>7d<SortIcon field="change7d" /></button>
+        <button className="flex-1 px-0.5 text-right h-full flex items-center justify-end hover:opacity-80" onClick={() => handleSort('change30d')}>30d<SortIcon field="change30d" /></button>
       </div>
 
       {/* Table Body */}
@@ -399,25 +392,25 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
             const displayQuote = quoteAsset ? `/${quoteAsset}` : '';
             const isFav = favorites.has(item.symbol);
 
-            // Compact Cell Renderer
-            const renderPctCell = (val: number | undefined, widthClass: string, isHighlight = false, hiddenClass = '') => {
+            // Cell Renderer
+            const renderPctCell = (val: number | undefined, isBoxed = false, isFlex = true) => {
                 const color = theme === 'pixel' 
                    ? (val !== undefined && val > 0 ? '#00aa00' : '#aa0000') 
                    : (val !== undefined && val > 0 ? '#10b981' : '#ef4444');
                 
-                // Highlight Logic
-                const style = isHighlight 
+                // Boxed Logic (24h)
+                const style = isBoxed 
                    ? { backgroundColor: getHeatmapColor(val, theme as ThemeMode), color: theme === 'pixel' ? '#000' : (theme === 'dark' ? '#f3f4f6' : '#1f2937') }
                    : { color };
                 
-                const roundedClass = isHighlight ? 'rounded py-1.5' : '';
-                // Font Size Logic: Highlighted gets BIGGER font
-                const fontClass = isHighlight ? 'text-sm sm:text-base font-bold' : 'text-[10px] sm:text-xs font-mono';
+                const wrapperClass = isBoxed ? 'w-14 sm:w-24' : (isFlex ? 'flex-1' : 'w-auto');
+                const innerClass = isBoxed ? 'rounded py-1 font-bold text-[9px] sm:text-xs' : 'text-[9px] sm:text-xs font-mono';
+                const containerClass = `px-0.5 sm:px-1 h-full flex items-center justify-end ${wrapperClass}`;
 
                 return (
-                    <div className={`${widthClass} ${hiddenClass} px-0.5 sm:px-1 h-full flex items-center justify-end`} >
-                        <div className={`w-full text-right ${fontClass} ${roundedClass}`} style={style}>
-                           {val !== undefined ? `${val > 0 ? '+' : ''}${val.toFixed(isHighlight ? 2 : 1)}%` : '-'}
+                    <div className={containerClass}>
+                        <div className={`w-full text-right ${innerClass}`} style={style}>
+                           {val !== undefined ? `${val > 0 ? '+' : ''}${val.toFixed(isBoxed ? 2 : 1)}%` : '-'}
                         </div>
                     </div>
                 );
@@ -431,17 +424,17 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
               >
                 {/* Star */}
                 <div className="w-6 sm:w-10 flex items-center justify-center h-full flex-shrink-0 cursor-pointer z-10" onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.symbol); }}>
-                  <span className={`text-sm ${isFav ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`}>★</span>
+                  <span className={`text-xs sm:text-sm ${isFav ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`}>★</span>
                 </div>
                 
                 {/* Symbol */}
-                <div className={`w-16 sm:w-24 px-1 flex flex-col justify-center h-full ${t.textMain} overflow-hidden`}>
-                     <span className="font-bold text-xs sm:text-sm truncate">{baseAsset}</span>
-                     <span className={`text-[9px] sm:text-[10px] ${t.textSub} opacity-70 truncate`}>{displayQuote}</span>
+                <div className={`w-12 sm:w-24 px-0.5 flex flex-col justify-center h-full ${t.textMain} overflow-hidden`}>
+                     <span className="font-bold text-[9px] sm:text-sm truncate">{baseAsset}</span>
+                     <span className={`text-[8px] sm:text-[10px] ${t.textSub} opacity-70 truncate hidden sm:inline`}>{displayQuote}</span>
                 </div>
                 
-                {/* Price (BIG FONT +2) */}
-                <div className={`flex-1 px-1 text-right font-mono text-sm sm:text-base font-bold h-full flex items-center justify-end ${t.textMain}`}>
+                {/* Price (Compact) */}
+                <div className={`w-14 sm:w-28 px-0.5 text-right font-mono text-[10px] sm:text-sm font-medium h-full flex items-center justify-end ${t.textMain}`}>
                   {item.price < 1 ? item.price.toFixed(5) : item.price.toFixed(2)}
                 </div>
                 
@@ -450,16 +443,16 @@ const VirtualTable = ({ data, favorites, onToggleFavorite, onSortedIdsChange, th
                   {Number(item.volume).toLocaleString(undefined, { maximumFractionDigits: 0, notation: 'compact' })}
                 </div>
                 
-                {/* 1h, 4h (Hidden Mobile) */}
-                {renderPctCell(item.changePercent1h, 'w-16', false, 'hidden sm:flex')}
-                {renderPctCell(item.changePercent4h, 'w-16', false, 'hidden sm:flex')}
+                {/* 1h, 4h (Flex-1) */}
+                {renderPctCell(item.changePercent1h, false, true)}
+                {renderPctCell(item.changePercent4h, false, true)}
 
-                {/* 24h (BIG FONT +2 & Highlighted) */}
-                {renderPctCell(item.changePercent24h, 'w-20 sm:w-24', true)}
+                {/* 24h (Boxed, Fixed Width) */}
+                {renderPctCell(item.changePercent24h, true, false)}
 
-                {/* 7d, 30d (Small, Compact) */}
-                {renderPctCell(item.changePercent7d, 'w-12 sm:w-16', false)}
-                {renderPctCell(item.changePercent30d, 'w-12 sm:w-16', false)}
+                {/* 7d, 30d (Flex-1) */}
+                {renderPctCell(item.changePercent7d, false, true)}
+                {renderPctCell(item.changePercent30d, false, true)}
 
               </div>
             );
@@ -508,7 +501,6 @@ const App = () => {
   useEffect(() => {
     if (!sortedSymbols.length) return;
     const interval = setInterval(() => {
-      // Prioritize fetching if 7d or 30d is missing
       const target = sortedSymbols.find(s => {
         const item = tickerDataMap.get(s);
         return item && (item.changePercent7d === undefined || item.changePercent30d === undefined);
@@ -591,14 +583,12 @@ const App = () => {
           </div>
 
           <div className="flex items-center gap-2 w-full md:w-auto relative z-30">
-            {/* Filter Dropdown */}
             <div className="relative flex-1 md:flex-none md:w-40" ref={filterRef}>
               <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`flex items-center justify-between w-full px-2 py-1 sm:py-2 border ${t.border} ${t.radius} text-[10px] sm:text-sm transition-all ${isFilterOpen ? t.bg : t.button} ${t.textMain}`}>
                 <span className="truncate">{selectedAssets.includes('ALL') ? 'All' : selectedAssets.join(', ')}</span>
                 <span className="ml-1">▼</span>
               </button>
               {isFilterOpen && (
-                // Added right-0 and max-w to prevent overflow
                 <div className={`absolute top-full right-0 mt-2 w-max max-w-[90vw] md:w-[400px] ${t.dropdownBg} backdrop-blur-xl border ${t.border} ${t.radius} shadow-2xl z-50 overflow-hidden flex flex-col max-h-[50vh]`}>
                   <div className={`p-3 overflow-y-auto custom-scrollbar grid grid-cols-4 gap-2`}>
                     {availableQuoteAssets.map((asset) => (
